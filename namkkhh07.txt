@@ -1,0 +1,89 @@
+-- =============================================
+-- ROBLOX MOBILE FPS BOOSTER (ANDROID OPTIMIZED)
+-- =============================================
+
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local Stats = game:GetService("Stats")
+
+-- 1. HIỂN THỊ FPS GỌN NHẸ TRÊN MÀN HÌNH ĐIỆN THOẠI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MobileFPS_Gui"
+ScreenGui.Parent = CoreGui
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 110, 0, 35)
+Frame.Position = UDim2.new(0, 10, 0, 10)
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.BackgroundTransparency = 0.5
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner", Frame)
+UICorner.CornerRadius = UDim.new(0, 6)
+
+local Label = Instance.new("TextLabel")
+Label.Size = UDim2.new(1, 0, 1, 0)
+Label.BackgroundTransparency = 1
+Label.TextColor3 = Color3.fromRGB(50, 255, 120)
+Label.TextSize = 12
+Label.Font = Enum.Font.SourceSansBold
+Label.Parent = Frame
+
+local lastTime = tick()
+local frameCount = 0
+
+RunService.RenderStepped:Connect(function()
+    frameCount = frameCount + 1
+    local curTime = tick()
+    if curTime - lastTime >= 1 then
+        local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+        Label.Text = string.format("⚡ FPS: %d | 📶 %dms", frameCount, ping)
+        frameCount = 0
+        lastTime = curTime
+    end
+end)
+
+-- 2. TỐI ƯU HÓA ĐỒ HỌA MÁY YẾU (GIẢM NHIỆT MÁY & TIẾT KIỆM PIN)
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 9e9
+
+for _, effect in pairs(Lighting:GetChildren()) do
+    if effect:IsA("PostEffect") or effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") then
+        effect.Enabled = false
+    end
+end
+
+-- Tắt cỏ 3D và tối ưu Terrain
+local terrain = Workspace:FindFirstChildOfClass("Terrain")
+if terrain then
+    terrain.WaterWaveSize = 0
+    terrain.WaterWaveSpeed = 0
+    terrain.WaterReflectance = 0
+    terrain.WaterTransparency = 0
+    pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
+end
+
+-- Tối ưu hóa vật thể
+local function ClearEffects(obj)
+    if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+        obj.Material = Enum.Material.SmoothPlastic
+        obj.CastShadow = false
+        if obj:IsA("MeshPart") then obj.TextureID = "" end
+    elseif obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+        obj.Enabled = false
+    elseif obj:IsA("Decal") or obj:IsA("Texture") then
+        obj.Texture = ""
+    end
+end
+
+for _, v in pairs(Workspace:GetDescendants()) do
+    ClearEffects(v)
+end
+
+Workspace.DescendantAdded:Connect(ClearEffects)
+
+print("📱 Android FPS Booster Loaded!")
