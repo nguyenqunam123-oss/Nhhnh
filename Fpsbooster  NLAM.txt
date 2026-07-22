@@ -1,0 +1,713 @@
+-- FPSBOOSTER ULTRA v3.3 - Debugged + Delta Optimized
+-- By Khang & DeepSeek
+
+if not getgenv then return end
+
+local Player = game.Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local GuiService = game:GetService("GuiService")
+
+-- ============================================
+-- HÀM LẤY PARENT GUI (DELTA COMPATIBILITY)
+-- ============================================
+local function getGuiParent()
+    local success, result = pcall(function()
+        return gethui and gethui()
+    end)
+    if success and result then
+        return result
+    end
+    return CoreGui
+end
+
+-- ============================================
+-- CHỐNG TRÙNG LẶP
+-- ============================================
+local parent = getGuiParent()
+local existing = parent:FindFirstChild("FPSBOOSTER_ULTRA")
+if existing then
+    existing:Destroy()
+    task.wait(0.1)
+end
+
+-- ============================================
+-- FPS COUNTER THẬT
+-- ============================================
+local FPSCounter = {
+    FPS = 0,
+    FrameCount = 0,
+    LastTime = tick(),
+    Display = nil
+}
+
+function FPSCounter:Update()
+    self.FrameCount = self.FrameCount + 1
+    local now = tick()
+    local elapsed = now - self.LastTime
+    
+    if elapsed >= 0.5 then
+        self.FPS = math.round(self.FrameCount / elapsed)
+        self.FrameCount = 0
+        self.LastTime = now
+        
+        if self.Display then
+            self.Display.Text = "📊 FPS: " .. self.FPS
+            if self.FPS >= 50 then
+                self.Display.TextColor3 = Color3.fromRGB(0, 255, 100)
+            elseif self.FPS >= 25 then
+                self.Display.TextColor3 = Color3.fromRGB(255, 255, 0)
+            else
+                self.Display.TextColor3 = Color3.fromRGB(255, 80, 80)
+            end
+        end
+    end
+end
+
+-- ============================================
+-- OBJECT CACHE SYSTEM
+-- ============================================
+local ObjectCache = {
+    Particles = {},
+    Trails = {},
+    Fires = {},
+    Decals = {},
+    BaseParts = {},
+    Meshes = {},
+    Beams = {},
+    Scanned = false
+}
+
+local function scanAndCacheObjects()
+    if ObjectCache.Scanned then return end
+    
+    ObjectCache.Particles = {}
+    ObjectCache.Trails = {}
+    ObjectCache.Fires = {}
+    ObjectCache.Decals = {}
+    ObjectCache.BaseParts = {}
+    ObjectCache.Meshes = {}
+    ObjectCache.Beams = {}
+    
+    local objects = Workspace:GetDescendants()
+    
+    for _, obj in ipairs(objects) do
+        if not obj.Parent then continue end
+        
+        if obj:IsA("ParticleEmitter") then
+            table.insert(ObjectCache.Particles, obj)
+        elseif obj:IsA("Trail") then
+            table.insert(ObjectCache.Trails, obj)
+        elseif obj:IsA("Fire") or obj:IsA("Smoke") then
+            table.insert(ObjectCache.Fires, obj)
+        elseif obj:IsA("Decal") then
+            table.insert(ObjectCache.Decals, obj)
+        elseif obj:IsA("BasePart") then
+            table.insert(ObjectCache.BaseParts, obj)
+        elseif obj:IsA("SpecialMesh") then
+            table.insert(ObjectCache.Meshes, obj)
+        elseif obj:IsA("Beam") then
+            table.insert(ObjectCache.Beams, obj)
+        end
+    end
+    
+    ObjectCache.Scanned = true
+end
+
+local function applyCachedOptimizations()
+    -- Particles
+    for _, obj in ipairs(ObjectCache.Particles) do
+        if obj and obj.Parent then
+            pcall(function() obj.Rate = 0; obj.Enabled = false end)
+        end
+    end
+    
+    -- Trails + Fires
+    for _, obj in ipairs(ObjectCache.Trails) do
+        if obj and obj.Parent then pcall(function() obj.Enabled = false end) end
+    end
+    for _, obj in ipairs(ObjectCache.Fires) do
+        if obj and obj.Parent then pcall(function() obj.Enabled = false end) end
+    end
+    
+    -- Decals
+    for _, obj in ipairs(ObjectCache.Decals) do
+        if obj and obj.Parent then pcall(function() obj.Transparency = 1 end) end
+    end
+    
+    -- BaseParts (task.defer batch)
+    local partIndex = 1
+    local function processParts()
+        local count = 0
+        while partIndex <= #ObjectCache.BaseParts and count < 200 do
+            local obj = ObjectCache.BaseParts[partIndex]
+            if obj and obj.Parent then
+                pcall(function()
+                    obj.CastShadow = false
+                    obj.Reflectance = 0
+                    if obj.Transparency > 0.5 then obj.Material = Enum.Material.SmoothPlastic end
+                end)
+            end
+            partIndex = partIndex + 1
+            count = count + 1
+        end
+        if partIndex <= #ObjectCache.BaseParts then
+            task.defer(processParts)
+        end
+    end
+    task.defer(processParts)
+    
+    -- Meshes
+    for _, obj in ipairs(ObjectCache.Meshes) do
+        if obj and obj.Parent then pcall(function() obj.TextureId = "" end) end
+    end
+    
+    -- Beams
+    for _, obj in ipairs(ObjectCache.Beams) do
+        if obj and obj.Parent then pcall(function() obj.Enabled = false end) end
+    end
+end
+
+-- ============================================
+-- FPS BOOSTER
+-- ============================================
+local function BoostFPS()
+    -- Phase 1: Lighting
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 999999
+        Lighting.FogStart = 999999
+        Lighting.Brightness = 3
+        Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
+        Lighting.Ambient = Color3.fromRGB(180, 180, 180)
+        Lighting.ClockTime = 14
+        Lighting.Technology = Enum.Technology.Compatibility
+        
+        local effects = {"Atmosphere", "Bloom", "Blur", "ColorCorrection", "DepthOfField", "SunRays", "Sky"}
+        for _, name in ipairs(effects) do
+            local effect = Lighting:FindFirstChild(name)
+            if effect then effect.Enabled = false end
+        end
+    end)
+    
+    -- Phase 2: Terrain
+    pcall(function()
+        local terrain = Workspace:FindFirstChild("Terrain")
+        if terrain then
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 0.9
+        end
+    end)
+    
+    -- Phase 3: Scan + Apply cache
+    scanAndCacheObjects()
+    applyCachedOptimizations()
+end
+
+-- ============================================
+-- TẠO GIAO DIỆN
+-- ============================================
+local SG = Instance.new("ScreenGui")
+SG.Name = "FPSBOOSTER_ULTRA"
+SG.Parent = parent
+SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+SG.ResetOnSpawn = false
+SG.Enabled = true
+
+-- FPS Counter Display
+local fpsDisplay = Instance.new("TextLabel")
+fpsDisplay.Size = UDim2.new(0, 130, 0, 25)
+fpsDisplay.Position = UDim2.new(1, -140, 0, 10)
+fpsDisplay.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
+fpsDisplay.BackgroundTransparency = 0.3
+fpsDisplay.BorderSizePixel = 0
+fpsDisplay.Text = "📊 FPS: --"
+fpsDisplay.TextColor3 = Color3.fromRGB(0, 255, 100)
+fpsDisplay.Font = Enum.Font.GothamBold
+fpsDisplay.TextSize = 14
+fpsDisplay.TextXAlignment = Enum.TextXAlignment.Center
+fpsDisplay.ZIndex = 999
+fpsDisplay.Visible = true
+fpsDisplay.Parent = SG
+
+Instance.new("UICorner", fpsDisplay).CornerRadius = UDim.new(0, 8)
+
+local fpsStroke = Instance.new("UIStroke")
+fpsStroke.Color = Color3.fromRGB(0, 255, 150)
+fpsStroke.Thickness = 1
+fpsStroke.Parent = fpsDisplay
+
+FPSCounter.Display = fpsDisplay
+
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        FPSCounter:Update()
+    end)
+end)
+
+-- ============================================
+-- NÚT MỞ MENU
+-- ============================================
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Name = "ToggleBtn"
+ToggleBtn.Size = UDim2.new(0, 55, 0, 55)
+ToggleBtn.Position = UDim2.new(0, 15, 0.5, -27)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.Text = "⚡"
+ToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
+ToggleBtn.TextSize = 26
+ToggleBtn.Font = Enum.Font.GothamBlack
+ToggleBtn.AutoButtonColor = false
+ToggleBtn.ZIndex = 10
+ToggleBtn.Active = true
+ToggleBtn.Selectable = true
+ToggleBtn.Visible = true
+ToggleBtn.Parent = SG
+
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(0, 255, 255)
+toggleStroke.Thickness = 2
+toggleStroke.Parent = ToggleBtn
+
+local toggleGlow = Instance.new("Frame")
+toggleGlow.Size = UDim2.new(1, 10, 1, 10)
+toggleGlow.Position = UDim2.new(0, -5, 0, -5)
+toggleGlow.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+toggleGlow.BackgroundTransparency = 0.85
+toggleGlow.BorderSizePixel = 0
+toggleGlow.ZIndex = 9
+Instance.new("UICorner", toggleGlow).CornerRadius = UDim.new(0, 14)
+toggleGlow.Parent = ToggleBtn
+
+-- ============================================
+-- MENU CHÍNH
+-- ============================================
+local Main = Instance.new("Frame")
+Main.Name = "MainMenu"
+Main.Size = UDim2.new(0, 280, 0, 290)
+Main.Position = UDim2.new(0.5, -140, 0.5, -145)
+Main.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
+Main.BorderSizePixel = 0
+Main.Visible = false
+Main.ZIndex = 5
+Main.Active = true
+Main.Selectable = true
+Main.Parent = SG
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 14)
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(0, 255, 255)
+mainStroke.Thickness = 2
+mainStroke.Parent = Main
+
+local mainGlow = Instance.new("Frame")
+mainGlow.Size = UDim2.new(1, 16, 1, 16)
+mainGlow.Position = UDim2.new(0, -8, 0, -8)
+mainGlow.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+mainGlow.BackgroundTransparency = 0.9
+mainGlow.BorderSizePixel = 0
+mainGlow.ZIndex = 4
+Instance.new("UICorner", mainGlow).CornerRadius = UDim.new(0, 18)
+mainGlow.Parent = Main
+
+-- ============================================
+-- TITLE BAR
+-- ============================================
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 45)
+TitleBar.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+TitleBar.BackgroundTransparency = 0.9
+TitleBar.BorderSizePixel = 0
+TitleBar.ZIndex = 7
+TitleBar.Active = true
+TitleBar.Parent = Main
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, -40, 0, 25)
+TitleText.Position = UDim2.new(0, 15, 0, 5)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "⚡ FPSBOOSTER ULTRA"
+TitleText.TextColor3 = Color3.fromRGB(0, 255, 255)
+TitleText.Font = Enum.Font.GothamBlack
+TitleText.TextSize = 18
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.ZIndex = 7
+TitleText.Parent = TitleBar
+
+local ByText = Instance.new("TextLabel")
+ByText.Size = UDim2.new(0, 100, 0, 12)
+ByText.Position = UDim2.new(0, 15, 0, 28)
+ByText.BackgroundTransparency = 1
+ByText.Text = "By Khang & DeepSeek"
+ByText.TextColor3 = Color3.fromRGB(150, 150, 200)
+ByText.Font = Enum.Font.Gotham
+ByText.TextSize = 10
+ByText.TextXAlignment = Enum.TextXAlignment.Left
+ByText.ZIndex = 7
+ByText.Parent = TitleBar
+
+local DragIcon = Instance.new("TextLabel")
+DragIcon.Size = UDim2.new(0, 30, 1, 0)
+DragIcon.Position = UDim2.new(1, -35, 0, 0)
+DragIcon.BackgroundTransparency = 1
+DragIcon.Text = "⋮"
+DragIcon.TextColor3 = Color3.fromRGB(0, 255, 255)
+DragIcon.TextSize = 22
+DragIcon.Font = Enum.Font.GothamBold
+DragIcon.ZIndex = 8
+DragIcon.Parent = TitleBar
+
+-- ============================================
+-- KÉO MENU
+-- ============================================
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+        mainStroke.Thickness = 3
+        mainStroke.Color = Color3.fromRGB(255, 255, 0)
+    end
+end)
+
+TitleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+        mainStroke.Thickness = 2
+        mainStroke.Color = Color3.fromRGB(0, 255, 255)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not dragging or not Main.Visible then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - dragStart
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+        local screenSize = camera.ViewportSize
+        local guiSize = Main.AbsoluteSize
+        local inset = GuiService:GetGuiInset()
+        local newX = math.clamp(startPos.X.Offset + delta.X, 0, screenSize.X - guiSize.X)
+        local newY = math.clamp(startPos.Y.Offset + delta.Y, inset.Y, screenSize.Y - guiSize.Y - inset.Y)
+        Main.Position = UDim2.new(0, newX, 0, newY)
+    end
+end)
+
+-- ============================================
+-- HÀM TẠO NÚT CHỨC NĂNG
+-- ============================================
+local function CreateButton(name, emoji, yPos, color)
+    local btnFrame = Instance.new("Frame")
+    btnFrame.Name = name .. "_Frame"
+    btnFrame.Size = UDim2.new(1, -30, 0, 42)
+    btnFrame.Position = UDim2.new(0, 15, 0, yPos)
+    btnFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
+    btnFrame.BorderSizePixel = 0
+    btnFrame.ZIndex = 6
+    btnFrame.Parent = Main
+    
+    Instance.new("UICorner", btnFrame).CornerRadius = UDim.new(0, 10)
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or Color3.fromRGB(0, 255, 255)
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.4
+    stroke.Parent = btnFrame
+    
+    local glow = Instance.new("Frame")
+    glow.Size = UDim2.new(1, 8, 1, 8)
+    glow.Position = UDim2.new(0, -4, 0, -4)
+    glow.BackgroundColor3 = color or Color3.fromRGB(0, 255, 255)
+    glow.BackgroundTransparency = 0.92
+    glow.BorderSizePixel = 0
+    glow.ZIndex = 5
+    Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 12)
+    glow.Parent = btnFrame
+    
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = emoji .. "  " .. name
+    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.ZIndex = 7
+    btn.AutoButtonColor = false
+    btn.Active = true
+    btn.Selectable = true
+    btn.Parent = btnFrame
+    
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(stroke, TweenInfo.new(0.15), {Transparency = 0, Thickness = 2.5}):Play()
+        TweenService:Create(glow, TweenInfo.new(0.15), {BackgroundTransparency = 0.7}):Play()
+        TweenService:Create(btn, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+    end)
+    
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(stroke, TweenInfo.new(0.2), {Transparency = 0.4, Thickness = 1.5}):Play()
+        TweenService:Create(glow, TweenInfo.new(0.2), {BackgroundTransparency = 0.92}):Play()
+        TweenService:Create(btn, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(220, 220, 220)}):Play()
+    end)
+    
+    btn.MouseButton1Down:Connect(function()
+        btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        stroke.Thickness = 3
+        stroke.Transparency = 0
+        TweenService:Create(btnFrame, TweenInfo.new(0.05), {Size = UDim2.new(1, -34, 0, 40)}):Play()
+    end)
+    
+    btn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            btnFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
+            stroke.Thickness = 1.5
+            stroke.Transparency = 0.4
+            TweenService:Create(btnFrame, TweenInfo.new(0.1), {Size = UDim2.new(1, -30, 0, 42)}):Play()
+        end
+    end)
+    
+    return btn, glow
+end
+
+-- Nút BOOST FPS
+local boostBtn, boostGlow = CreateButton("BOOST FPS", "🚀", 55, Color3.fromRGB(0, 255, 150))
+boostBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(boostGlow, TweenInfo.new(0.1), {BackgroundTransparency = 0.1}):Play()
+    boostBtn.Text = "⚡ BOOSTING..."
+    BoostFPS()
+    task.wait(0.2)
+    TweenService:Create(boostGlow, TweenInfo.new(0.3), {BackgroundTransparency = 0.7}):Play()
+    boostBtn.Text = "✅ DONE! FPS: " .. FPSCounter.FPS
+    task.wait(2)
+    boostBtn.Text = "🚀  BOOST FPS"
+end)
+
+-- Nút TỐI ƯU NHANH
+local quickBtn, quickGlow = CreateButton("TỐI ƯU NHANH", "⚡", 105, Color3.fromRGB(255, 255, 0))
+quickBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(quickGlow, TweenInfo.new(0.1), {BackgroundTransparency = 0.1}):Play()
+    quickBtn.Text = "🔥 ĐANG TỐI ƯU..."
+    BoostFPS()
+    pcall(function()
+        Workspace.StreamingMinRadius = 32
+        Workspace.StreamingTargetRadius = 64
+        Workspace.StreamingEnabled = true
+    end)
+    task.wait(0.2)
+    TweenService:Create(quickGlow, TweenInfo.new(0.3), {BackgroundTransparency = 0.7}):Play()
+    quickBtn.Text = "✅ FPS: " .. FPSCounter.FPS
+    task.wait(2)
+    quickBtn.Text = "⚡  TỐI ƯU NHANH"
+end)
+
+-- Nút NAMELESS ADMIN
+local adminBtn, adminGlow = CreateButton("NAMELESS ADMIN", "🔧", 155, Color3.fromRGB(255, 150, 0))
+adminBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(adminGlow, TweenInfo.new(0.1), {BackgroundTransparency = 0.1}):Play()
+    adminBtn.Text = "⏳ LOADING..."
+    task.spawn(function()
+        local success = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))()
+        end)
+        adminBtn.Text = success and "✅ LOADED!" or "❌ ERROR"
+        task.wait(1.5)
+        Main.Visible = false
+    end)
+end)
+
+-- ============================================
+-- RESIZE MENU
+-- ============================================
+local currentSize = "normal"
+local sizeConfig = {
+    small = {
+        mainW = 220, mainH = 240,
+        titleH = 35, titleSize = 14, bySize = 9,
+        btnH = 34, btnFont = 11,
+        boostY = 45, quickY = 85, adminY = 125, resizeY = 170,
+        toggleSize = 40, toggleFont = 20,
+        resizeBtnH = 24, resizeBtnFont = 10
+    },
+    normal = {
+        mainW = 280, mainH = 290,
+        titleH = 45, titleSize = 18, bySize = 10,
+        btnH = 42, btnFont = 14,
+        boostY = 55, quickY = 105, adminY = 155, resizeY = 210,
+        toggleSize = 55, toggleFont = 26,
+        resizeBtnH = 30, resizeBtnFont = 12
+    },
+    large = {
+        mainW = 350, mainH = 350,
+        titleH = 55, titleSize = 22, bySize = 12,
+        btnH = 52, btnFont = 16,
+        boostY = 65, quickY = 125, adminY = 185, resizeY = 255,
+        toggleSize = 70, toggleFont = 32,
+        resizeBtnH = 36, resizeBtnFont = 14
+    }
+}
+
+local function updateMenuSize(size)
+    local cfg = sizeConfig[size]
+    if not cfg then return end
+    currentSize = size
+    
+    TweenService:Create(Main, TweenInfo.new(0.3), {Size = UDim2.new(0, cfg.mainW, 0, cfg.mainH)}):Play()
+    TweenService:Create(TitleBar, TweenInfo.new(0.3), {Size = UDim2.new(1, 0, 0, cfg.titleH)}):Play()
+    TitleText.TextSize = cfg.titleSize
+    ByText.TextSize = cfg.bySize
+    
+    TweenService:Create(ToggleBtn, TweenInfo.new(0.3), {Size = UDim2.new(0, cfg.toggleSize, 0, cfg.toggleSize)}):Play()
+    ToggleBtn.TextSize = cfg.toggleFont
+    
+    local buttons = {
+        {frame = boostBtn.Parent, y = cfg.boostY},
+        {frame = quickBtn.Parent, y = cfg.quickY},
+        {frame = adminBtn.Parent, y = cfg.adminY}
+    }
+    
+    for _, btnData in ipairs(buttons) do
+        TweenService:Create(btnData.frame, TweenInfo.new(0.3), {
+            Size = UDim2.new(1, -30, 0, cfg.btnH),
+            Position = UDim2.new(0, 15, 0, btnData.y)
+        }):Play()
+        local textBtn = btnData.frame:FindFirstChildOfClass("TextButton")
+        if textBtn then textBtn.TextSize = cfg.btnFont end
+    end
+    
+    local resizeFrame = Main:FindFirstChild("ResizeFrame")
+    if resizeFrame then
+        TweenService:Create(resizeFrame, TweenInfo.new(0.3), {
+            Size = UDim2.new(1, -30, 0, cfg.resizeBtnH),
+            Position = UDim2.new(0, 15, 0, cfg.resizeY)
+        }):Play()
+        for _, child in ipairs(resizeFrame:GetChildren()) do
+            if child:IsA("TextButton") then child.TextSize = cfg.resizeBtnFont end
+        end
+    end
+end
+
+-- Frame resize
+local resizeFrame = Instance.new("Frame")
+resizeFrame.Name = "ResizeFrame"
+resizeFrame.Size = UDim2.new(1, -30, 0, 30)
+resizeFrame.Position = UDim2.new(0, 15, 0, 210)
+resizeFrame.BackgroundTransparency = 1
+resizeFrame.ZIndex = 6
+resizeFrame.Parent = Main
+
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.Size = UDim2.new(1, 0, 0, 15)
+sizeLabel.Position = UDim2.new(0, 0, 0, -18)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.Text = "📐 KÍCH THƯỚC MENU"
+sizeLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+sizeLabel.Font = Enum.Font.GothamBold
+sizeLabel.TextSize = 10
+sizeLabel.TextXAlignment = Enum.TextXAlignment.Center
+sizeLabel.ZIndex = 7
+sizeLabel.Parent = resizeFrame
+
+local sizeOptions = {
+    {label = "NHỎ", value = "small", color = Color3.fromRGB(100, 200, 100)},
+    {label = "THƯỜNG", value = "normal", color = Color3.fromRGB(0, 255, 255)},
+    {label = "LỚN", value = "large", color = Color3.fromRGB(255, 150, 50)}
+}
+
+local sizeBtns = {}
+
+for i, opt in ipairs(sizeOptions) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.33, -4, 1, 0)
+    btn.Position = UDim2.new((i-1)/3, 2, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
+    btn.BorderSizePixel = 0
+    btn.Text = opt.label
+    btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    btn.Font = Enum.Font.GothamBlack
+    btn.TextSize = 12
+    btn.ZIndex = 7
+    btn.AutoButtonColor = false
+    btn.Active = true
+    btn.Selectable = true
+    btn.Parent = resizeFrame
+    
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = opt.color
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.5
+    stroke.Parent = btn
+    
+    if opt.value == "normal" then
+        btn.BackgroundColor3 = opt.color
+        btn.BackgroundTransparency = 0.8
+        btn.TextColor3 = opt.color
+        stroke.Transparency = 0
+    end
+    
+    btn.MouseButton1Click:Connect(function()
+        for _, b in ipairs(sizeBtns) do
+            b.Button.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
+            b.Button.BackgroundTransparency = 0
+            b.Button.TextColor3 = Color3.fromRGB(180, 180, 180)
+            b.Button.UIStroke.Transparency = 0.5
+        end
+        
+        btn.BackgroundColor3 = opt.color
+        btn.BackgroundTransparency = 0.8
+        btn.TextColor3 = opt.color
+        stroke.Transparency = 0
+        
+        updateMenuSize(opt.value)
+    end)
+    
+    table.insert(sizeBtns, {Button = btn})
+end
+
+-- ============================================
+-- TOGGLE MENU + PULSE
+-- ============================================
+ToggleBtn.MouseButton1Click:Connect(function()
+    Main.Visible = not Main.Visible
+end)
+
+spawn(function()
+    while SG and SG.Parent do
+        pcall(function()
+            TweenService:Create(toggleGlow, TweenInfo.new(0.8), {BackgroundTransparency = 0.9}):Play()
+        end)
+        task.wait(0.8)
+        pcall(function()
+            TweenService:Create(toggleGlow, TweenInfo.new(0.8), {BackgroundTransparency = 0.75}):Play()
+        end)
+        task.wait(0.8)
+    end
+end)
+
+-- ============================================
+-- AUTO BOOST + PRE-SCAN
+-- ============================================
+task.delay(2, function()
+    pcall(function()
+        scanAndCacheObjects()
+        BoostFPS()
+    end)
+end)
+
+print("✅ FPSBOOSTER ULTRA v3.3 - Delta Ready")
+print("🛡 Anti-Dup | 🎯 gethui() Compatible | 🧠 Cache System")
+print("⚡ task.defer Batch | 📊 Real FPS Counter")
