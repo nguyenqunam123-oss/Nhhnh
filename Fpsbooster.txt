@@ -1,0 +1,334 @@
+-- FPSBOOSTER V4.0 - Tất Cả Client Mobile
+-- Created by DeepSeek[App]
+
+local Player = game.Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
+
+-- ============================================
+-- FPS COUNTER
+-- ============================================
+local function CreateFPS()
+    local old = CoreGui:FindFirstChild("FPS_ULTRA")
+    if old then old:Destroy() end
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "FPS_ULTRA"
+    sg.Parent = CoreGui
+    sg.ResetOnSpawn = false
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 150, 0, 45)
+    frame.Position = UDim2.new(1, -165, 0, 20)
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = sg
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+    local stroke = Instance.new("UIStroke", frame)
+    stroke.Color = Color3.fromRGB(0, 255, 200)
+    stroke.Thickness = 1.5
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "⚡ FPS: 0"
+    label.TextColor3 = Color3.fromRGB(0, 255, 100)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 18
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.Parent = frame
+    return label
+end
+
+local fpsLabel = CreateFPS()
+local count = 0
+local last = tick()
+
+RunService.RenderStepped:Connect(function()
+    if not fpsLabel then return end
+    count = count + 1
+    local now = tick()
+    if now - last >= 0.3 then
+        local fps = math.floor(count / (now - last) + 0.5)
+        count = 0
+        last = now
+        fpsLabel.Text = "⚡ FPS: " .. fps
+        if fps >= 40 then
+            fpsLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+        elseif fps >= 25 then
+            fpsLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        else
+            fpsLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        end
+    end
+end)
+
+-- ============================================
+-- HỆ THỐNG TAG EFFECT (CHO TẤT CẢ CLIENT)
+-- ============================================
+local function TagEffect(obj)
+    if obj and obj.Parent then
+        pcall(function()
+            if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or 
+               obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") or obj:IsA("Explosion") then
+                if not CollectionService:HasTag(obj, "Effect") then
+                    CollectionService:AddTag(obj, "Effect")
+                end
+            end
+        end)
+    end
+end
+
+task.spawn(function()
+    local objects = Workspace:GetDescendants()
+    for i = 1, #objects do
+        TagEffect(objects[i])
+        if i % 100 == 0 then task.wait() end
+    end
+end)
+
+Workspace.DescendantAdded:Connect(TagEffect)
+
+-- ============================================
+-- XÓA EFFECT (CHIA NHỎ - AN TOÀN CHO MOBILE)
+-- ============================================
+local function CleanEffects()
+    task.spawn(function()
+        local tagged = CollectionService:GetTagged("Effect")
+        for i = 1, #tagged do
+            local obj = tagged[i]
+            if obj and obj.Parent then
+                pcall(function() obj:Destroy() end)
+            end
+            if i % 50 == 0 then task.wait() end
+        end
+    end)
+end
+
+-- ============================================
+-- PLAY MODE (GIỮ DI CHUYỂN)
+-- ============================================
+local function PlayMode()
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 999999
+        Lighting.FogStart = 999999
+        Lighting.Brightness = 0.6
+        Lighting.OutdoorAmbient = Color3.fromRGB(60, 60, 60)
+        Lighting.Ambient = Color3.fromRGB(40, 40, 40)
+        Lighting.Technology = Enum.Technology.Compatibility
+        Lighting.ClockTime = 14
+        Lighting.BloomIntensity = 0
+        
+        for _, c in pairs(Lighting:GetChildren()) do
+            if c:IsA("Atmosphere") or c:IsA("Bloom") or c:IsA("Blur") or 
+               c:IsA("ColorCorrection") or c:IsA("DepthOfField") or c:IsA("SunRays") then
+                c:Destroy()
+            end
+        end
+    end)
+
+    pcall(function()
+        local t = Workspace:FindFirstChild("Terrain")
+        if t then
+            t.WaterWaveSize = 0
+            t.WaterWaveSpeed = 0
+            t.WaterReflectance = 0
+            t.WaterTransparency = 1
+        end
+    end)
+
+    pcall(function()
+        Workspace.StreamingMinRadius = 3
+        Workspace.StreamingTargetRadius = 6
+        Workspace.StreamingEnabled = true
+        Workspace.GlobalWind = Vector3.new(0, 0, 0)
+    end)
+
+    CleanEffects()
+
+    task.spawn(function()
+        local objects = Workspace:GetDescendants()
+        for i = 1, #objects do
+            local obj = objects[i]
+            if obj and obj.Parent then
+                pcall(function()
+                    if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+                        obj.CastShadow = false
+                        obj.Reflectance = 0
+                        obj.Material = Enum.Material.SmoothPlastic
+                        if obj:IsA("MeshPart") then
+                            obj.RenderFidelity = Enum.RenderFidelity.Automatic
+                            obj.LevelOfDetail = Enum.LevelOfDetail.Level1
+                        end
+                    elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                        obj.Transparency = 1
+                    end
+                end)
+            end
+            if i % 200 == 0 then task.wait() end
+        end
+    end)
+
+    task.spawn(function()
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= Player and p.Character then
+                pcall(function()
+                    for _, v in pairs(p.Character:GetChildren()) do
+                        if v:IsA("Clothing") or v:IsA("Shirt") or v:IsA("Pants") or 
+                           v:IsA("Hat") or v:IsA("Accessory") or v:IsA("Tool") then
+                            v:Destroy()
+                        end
+                    end
+                end)
+            end
+        end
+    end)
+
+    pcall(function()
+        for _, v in pairs(CoreGui:GetChildren()) do
+            if v.Name ~= "FPS_ULTRA" and v.Name ~= "Chat" then
+                if v:IsA("ScreenGui") and v.Enabled then
+                    local n = v.Name:lower()
+                    if n:find("hint") or n:find("tip") or n:find("tutorial") or 
+                       n:find("notification") or n:find("popup") then
+                        v.Enabled = false
+                    end
+                end
+            end
+        end
+    end)
+
+    print("[Play Mode] Bật thành công! Vẫn di chuyển được.")
+end
+
+-- ============================================
+-- AFK MODE (FPS MAX)
+-- ============================================
+local function AFKMode()
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 0
+        Lighting.FogStart = 0
+        Lighting.Brightness = 0.3
+        Lighting.OutdoorAmbient = Color3.fromRGB(10, 10, 10)
+        Lighting.Ambient = Color3.fromRGB(5, 5, 5)
+        Lighting.Technology = Enum.Technology.Compatibility
+        Lighting.ClockTime = 12
+        Lighting.BloomIntensity = 0
+        
+        for _, c in pairs(Lighting:GetChildren()) do
+            if c:IsA("Atmosphere") or c:IsA("Bloom") or c:IsA("Blur") or 
+               c:IsA("ColorCorrection") or c:IsA("DepthOfField") or c:IsA("SunRays") then
+                c:Destroy()
+            end
+        end
+    end)
+
+    pcall(function()
+        local t = Workspace:FindFirstChild("Terrain")
+        if t then
+            t.WaterWaveSize = 0
+            t.WaterWaveSpeed = 0
+            t.WaterReflectance = 0
+            t.WaterTransparency = 1
+            t:Clear()
+        end
+    end)
+
+    pcall(function()
+        Workspace.StreamingMinRadius = 1
+        Workspace.StreamingTargetRadius = 2
+        Workspace.StreamingEnabled = true
+    end)
+
+    CleanEffects()
+
+    task.spawn(function()
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Character then
+                pcall(function()
+                    for _, v in pairs(p.Character:GetChildren()) do
+                        if v:IsA("Clothing") or v:IsA("Shirt") or v:IsA("Pants") or 
+                           v:IsA("Hat") or v:IsA("Accessory") or v:IsA("Tool") then
+                            v:Destroy()
+                        end
+                    end
+                    local h = p.Character:FindFirstChildOfClass("Humanoid")
+                    if h then
+                        for _, a in pairs(p.Character:GetDescendants()) do
+                            if a:IsA("AnimationTrack") or a:IsA("Animation") then
+                                a:Destroy()
+                            end
+                        end
+                        if h.Animator then h.Animator:Destroy() end
+                        local na = Instance.new("Animator")
+                        na.Parent = h
+                    end
+                end)
+            end
+        end
+    end)
+
+    pcall(function()
+        for _, v in pairs(CoreGui:GetChildren()) do
+            if v.Name ~= "FPS_ULTRA" then
+                if v:IsA("ScreenGui") then
+                    v.Enabled = false
+                end
+            end
+        end
+    end)
+
+    print("[AFK Mode] Bật thành công! FPS Max.")
+end
+
+-- ============================================
+-- UI WIZARD - TÊN FPSBOOSTER V4.0
+-- ============================================
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
+
+local Window = Library:NewWindow("FPSBOOSTER V4.0")
+
+local Section1 = Window:NewSection("🎮 CHỌN CHẾ ĐỘ")
+
+Section1:CreateButton("🎮 PLAY MODE (Giữ di chuyển)", function()
+    PlayMode()
+    print("✅ Play Mode activated!")
+end)
+
+Section1:CreateButton("💤 AFK MODE (FPS Max)", function()
+    AFKMode()
+    print("✅ AFK Mode activated!")
+end)
+
+local Section2 = Window:NewSection("🔧 ADMIN")
+
+Section2:CreateButton("🚀 LOAD NAMELESS ADMIN", function()
+    print("⏳ Đang load admin...")
+    local s, e = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))()
+    end)
+    if s then
+        print("✅ Admin loaded!")
+    else
+        print("❌ Lỗi: " .. tostring(e))
+    end
+end)
+
+Section2:CreateButton("🗑️ XÓA UI", function()
+    for _, v in pairs(CoreGui:GetChildren()) do
+        if v:IsA("ScreenGui") and v.Name ~= "FPS_ULTRA" then
+            v:Destroy()
+        end
+    end
+end)
+
+-- ============================================
+-- KHỞI ĐỘNG - KHÔNG AUTO, TÊN ĐÚNG
+-- ============================================
+print("FPSBOOSTER V4.0 Ready! | Chọn chế độ để bắt đầu")
+print("Created by DeepSeek[App]")
